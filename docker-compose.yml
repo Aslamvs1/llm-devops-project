@@ -53,8 +53,8 @@ services:
       - "8001"
 
     depends_on:
-      - vllm:
-          condition: service_healthy
+      vllm:
+        condition: service_healthy
          
 
   streamlit:
