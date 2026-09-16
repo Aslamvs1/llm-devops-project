@@ -1,0 +1,78 @@
+version: '3.9'
+
+services:
+
+  vllm:
+    image: vllm/vllm-openai-cpu:latest-x86_64
+    
+    shm_size: "1gb"
+
+    healthcheck:
+     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+     interval: 10s
+     timeout: 5s
+     retries: 5
+     start_period: 60s
+    
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - /home/ubuntu/.cache/huggingface:/root/.cache/huggingface
+
+    environment:
+      VLLM_CPU_KVCACHE_SPACE: "1"
+
+    command:
+      - Qwen/Qwen2.5-0.5B-Instruct
+      - --dtype
+      - bfloat16
+      - --max-model-len
+      - "512"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+
+
+  fastapi:
+    image: llm-devops-app:latest
+
+    ports:
+      - "8001:8001"
+
+    environment:
+      VLLM_URL: "http://vllm:8000/v1"
+
+    command:
+      - uvicorn
+      - app.api:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+
+    depends_on:
+      - vllm
+         
+
+  streamlit:
+    image: llm-devops-app:latest
+
+    ports:
+      - "8501:8501"
+
+    environment:
+      FASTAPI_URL: "http://fastapi:8001"
+
+    command:
+      - streamlit
+      - run
+      - app/streamlit_app.py
+      - --server.address
+      - 0.0.0.0
+      - --server.port
+      - "8501"
+
+    depends_on:
+      - fastapi
