@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("🤖 Qwen AI Chat")
-st.caption("Self-hosted LLM • FastAPI • vLLM • AWS EC2")
+st.caption("Self-hosted LLM • FastAPI • vLLM • AWS EC2 • CI/CD")
 
 FASTAPI_URL = os.getenv(
     "FASTAPI_URL",
