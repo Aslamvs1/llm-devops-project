@@ -1,53 +1,113 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: llm-devops-app
+  EKS_CLUSTER: llm-devops-cluster
+
 jobs:
-  build:
+  build-test-push:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::477016073098:role/GitHubActions-EKS-ECR-Role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Build Docker image
-        run: docker build -t llm-devops-app:ci .
-
-      - name: Run container
-        run: docker run -d --name llm-api-test -p 8001:8001 llm-devops-app:ci
-
-      - name: Test API
         run: |
+          docker build \
+            -t ${{ env.ECR_REPOSITORY }}:${{ github.sha }} \
+            -t ${{ env.ECR_REPOSITORY }}:latest \
+            .
+
+      - name: Run container test
+        run: |
+          docker run -d \
+            --name llm-api-test \
+            -p 8001:8001 \
+            ${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
           sleep 5
+
           curl -f http://localhost:8001/
 
       - name: Stop test container
         if: always()
         run: docker rm -f llm-api-test
 
-  deploy:
-    needs: build
+      - name: Tag image for ECR
+        run: |
+          ECR_URI=477016073098.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}
+
+          docker tag ${{ env.ECR_REPOSITORY }}:${{ github.sha }} $ECR_URI:${{ github.sha }}
+          docker tag ${{ env.ECR_REPOSITORY }}:latest $ECR_URI:latest
+
+      - name: Push image to ECR
+        run: |
+          ECR_URI=477016073098.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}
+
+          docker push $ECR_URI:${{ github.sha }}
+          docker push $ECR_URI:latest
+
+  deploy-eks:
+    needs: build-test-push
     runs-on: ubuntu-latest
 
     steps:
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
-          chmod 600 ~/.ssh/ec2_key
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Trust EC2 host
-        run: |
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::477016073098:role/GitHubActions-EKS-ECR-Role
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy to EC2
+      - name: Configure kubectl for EKS
         run: |
-          ssh -i ~/.ssh/ec2_key \
-            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
-            "cd ~/llm-devops-project && \
-             git pull && \
-             sudo docker build -t llm-devops-app:latest . && \
-             sudo docker compose up -d"
+          aws eks update-kubeconfig \
+            --name ${{ env.EKS_CLUSTER }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Update FastAPI image
+        run: |
+          kubectl set image deployment/fastapi-deployment \
+            fastapi=477016073098.dkr.ecr.ap-south-1.amazonaws.com/llm-devops-app:${{ github.sha }}
+
+      - name: Update Streamlit image
+        run: |
+          kubectl set image deployment/streamlit-deployment \
+            streamlit=477016073098.dkr.ecr.ap-south-1.amazonaws.com/llm-devops-app:${{ github.sha }}
+
+      - name: Wait for FastAPI rollout
+        run: |
+          kubectl rollout status deployment/fastapi-deployment \
+            --timeout=180s
+
+      - name: Wait for Streamlit rollout
+        run: |
+          kubectl rollout status deployment/streamlit-deployment \
+            --timeout=180s
+
+      - name: Verify deployment
+        run: |
+          kubectl get deployments
+          kubectl get pods

@@ -1,0 +1,14 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: llm-devops-cluster
+  region: ap-south-1
+
+managedNodeGroups:
+  - name: llm-devops-workers
+    instanceType: m7i-flex.large
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    volumeSize: 30

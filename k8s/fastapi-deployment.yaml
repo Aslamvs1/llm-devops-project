@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: fastapi-deployment
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: fastapi
+
+  template:
+    metadata:
+      labels:
+        app: fastapi
+
+    spec:
+      containers:
+        - name: fastapi
+          image: 477016073098.dkr.ecr.ap-south-1.amazonaws.com/llm-devops-app:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8001
+
+          env:
+            - name: VLLM_URL
+              value: "http://vllm:8000/v1"

@@ -1,0 +1,23 @@
+service:
+  type: ClusterIP
+
+persistence:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 150m
+    memory: 512Mi
+
+readinessProbe:
+  initialDelaySeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+livenessProbe:
+  initialDelaySeconds: 120
+  timeoutSeconds: 5
+  failureThreshold: 6

@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: streamlit-deployment
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: streamlit
+
+  template:
+    metadata:
+      labels:
+        app: streamlit
+
+    spec:
+      containers:
+        - name: streamlit
+          image: 477016073098.dkr.ecr.ap-south-1.amazonaws.com/llm-devops-app:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8501
+
+          env:
+            - name: FASTAPI_URL
+              value: "http://fastapi:8001"
+
+          args:
+            - streamlit
+            - run
+            - app/streamlit_app.py
+            - --server.address
+            - 0.0.0.0
+            - --server.port
+            - "8501"

@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: vllm-deployment
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: vllm
+
+  template:
+    metadata:
+      labels:
+        app: vllm
+
+    spec:
+
+      enableServiceLinks: false
+
+      
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai-cpu:latest-x86_64
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 8000
+
+          env:
+            - name: VLLM_CPU_KVCACHE_SPACE
+              value: "1"
+
+          args:
+            - Qwen/Qwen2.5-0.5B-Instruct
+            - --dtype
+            - bfloat16
+            - --max-model-len
+            - "512"
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+
+          resources:
+            requests:
+              cpu: "1"
+              memory: "4Gi"
+            limits:
+              cpu: "2"
+              memory: "6Gi"
+
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
